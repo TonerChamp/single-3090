@@ -1,0 +1,68 @@
+# June 19 golden llama-swap config, paths pointed at this repo.
+# llama-swap itself is https://github.com/mostlygeek/llama-swap (v216, 2982dd3 on the rig).
+# One chat model resident. Idle unload after ttl seconds.
+# The OpenAI model name selects the compose file.
+#
+# Export before starting:
+#   SINGLE_3090_ROOT  this repo
+#   MODEL_DIR         directory that holds the weight subfolders
+#
+# Listens on :8030 via swap/llama-swap.service. Each cmd uses llama-swap's ${PORT}.
+# The ik_llama entry added later on the rig is not in this file. See profiles/qwen-27b-ik.md.
+
+healthCheckTimeout: 240
+startPort: 8020
+logLevel: info
+
+models:
+  qwen-35b-a3b:
+    proxy: "http://127.0.0.1:${PORT}"
+    checkEndpoint: "/v1/models"
+    ttl: 1800
+    cmd: |
+      bash -c '
+      set -euo pipefail
+      : "${SINGLE_3090_ROOT:?set SINGLE_3090_ROOT}"
+      : "${MODEL_DIR:?set MODEL_DIR}"
+      cd "${SINGLE_3090_ROOT}/compose"
+      PORT=${PORT} MODEL_DIR="${MODEL_DIR}" docker compose -f qwen-35b-a3b.yml -p llamaswap-a3b down --remove-orphans 2>/dev/null || true
+      for i in $(seq 1 60); do
+        used=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits | tr -d " ")
+        if [ "$used" -lt 500 ]; then break; fi
+        sleep 1
+      done
+      exec env PORT=${PORT} MODEL_DIR="${MODEL_DIR}" docker compose -f qwen-35b-a3b.yml -p llamaswap-a3b up --remove-orphans --abort-on-container-exit
+      '
+    cmdStop: |
+      bash -c '
+      : "${SINGLE_3090_ROOT:?set SINGLE_3090_ROOT}"
+      : "${MODEL_DIR:?set MODEL_DIR}"
+      cd "${SINGLE_3090_ROOT}/compose"
+      PORT=${PORT} MODEL_DIR="${MODEL_DIR}" docker compose -f qwen-35b-a3b.yml -p llamaswap-a3b down --remove-orphans
+      '
+
+  qwen3.6-27b-mtp:
+    proxy: "http://127.0.0.1:${PORT}"
+    checkEndpoint: "/v1/models"
+    ttl: 1800
+    cmd: |
+      bash -c '
+      set -euo pipefail
+      : "${SINGLE_3090_ROOT:?set SINGLE_3090_ROOT}"
+      : "${MODEL_DIR:?set MODEL_DIR}"
+      cd "${SINGLE_3090_ROOT}/compose"
+      PORT=${PORT} MODEL_DIR="${MODEL_DIR}" CTX_SIZE=131072 MTP_N_MAX=2 docker compose -f qwen-27b-mtp.yml -p llamaswap-27bmtp down --remove-orphans 2>/dev/null || true
+      for i in $(seq 1 60); do
+        used=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits | tr -d " ")
+        if [ "$used" -lt 500 ]; then break; fi
+        sleep 1
+      done
+      exec env PORT=${PORT} MODEL_DIR="${MODEL_DIR}" CTX_SIZE=131072 MTP_N_MAX=2 docker compose -f qwen-27b-mtp.yml -p llamaswap-27bmtp up --remove-orphans --abort-on-container-exit
+      '
+    cmdStop: |
+      bash -c '
+      : "${SINGLE_3090_ROOT:?set SINGLE_3090_ROOT}"
+      : "${MODEL_DIR:?set MODEL_DIR}"
+      cd "${SINGLE_3090_ROOT}/compose"
+      PORT=${PORT} MODEL_DIR="${MODEL_DIR}" CTX_SIZE=131072 MTP_N_MAX=2 docker compose -f qwen-27b-mtp.yml -p llamaswap-27bmtp down --remove-orphans
+      '

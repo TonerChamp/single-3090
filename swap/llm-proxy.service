@@ -1,0 +1,14 @@
+[Unit]
+Description=Sentinel-aware proxy in front of the local LLM endpoint
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 %h/single-3090/swap/llm-proxy.py
+Restart=on-failure
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

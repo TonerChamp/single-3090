@@ -1,0 +1,93 @@
+# ===========================================================================
+# Profile (at-a-glance):
+#   Model:     Qwen3.6-27B (Unsloth Q3_K_XL GGUF, MTP variant)
+#   Engine:    llama.cpp (PR #22673 — MTP merged 2026-05-16)
+#   Topology:  Single 3090 (TP=1)
+#   Drafter:   MTP (--spec-type draft-mtp, n-max 2)
+#   KV:        q4_0 (4-bit packed)
+#   Vision:    yes (mmproj F16)
+#   Max ctx:   262K
+#   Status:    🧪 Bench candidate (Test 3 follow-up — see TESTING-PLAN.md)
+#   Baseline:  Qwen 27B llamacpp/default = 37 TPS flat
+#   Target:    ~47-55 TPS per research projection
+#
+# VRAM budget on 24 GB:
+#   weights (Q3_K_XL):           ~14.5 GB
+#   KV at 262K (q4_0 K+V):        ~4.5 GB
+#   mmproj F16:                   ~0.8 GB
+#   MTP overhead (PR #22673):    ~2.5 GB
+#   total:                       ~22.3 GB
+#   headroom:                    ~1.7 GB — TIGHT, watch first start
+
+services:
+  llama-cpp-qwen36-27b-mtp:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    container_name: llama-cpp-qwen36-27b-mtp
+    restart: "no"
+    ports:
+      - "${PORT:-8020}:8080"
+    volumes:
+      - ${MODEL_DIR:?set MODEL_DIR}/qwen3.6-27b-gguf-mtp:/models:ro
+    entrypoint:
+      - bash
+      - -c
+      - |
+        set -e
+        EXTRA_ARGS=()
+        if [ "$${DISABLE_THINKING:-1}" = "1" ]; then
+          EXTRA_ARGS+=("--chat-template-kwargs" '{"enable_thinking":false}')
+          echo "[entrypoint] DISABLE_THINKING=1"
+        fi
+        if [ "$${NO_MMPROJ_OFFLOAD:-0}" = "1" ]; then
+          EXTRA_ARGS+=("--no-mmproj-offload")
+          echo "[entrypoint] NO_MMPROJ_OFFLOAD=1"
+        fi
+        exec /app/llama-server "$$@" "$${EXTRA_ARGS[@]}"
+      - --
+    command:
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - --alias
+      - qwen3.6-27b-mtp
+      - -m
+      - /models/unsloth-q3kxl/Qwen3.6-27B-UD-Q3_K_XL.gguf
+      - --mmproj
+      - /models/unsloth-q3kxl/mmproj-F16.gguf
+      - -c
+      - ${CTX_SIZE:-262144}
+      - -b
+      - ${BATCH_SIZE:-4096}
+      - -ub
+      - ${UBATCH_SIZE:-2048}
+      - -ngl
+      - "99"
+      - -fa
+      - "on"
+      - --cache-type-k
+      - ${KV_TYPE:-q4_0}
+      - --cache-type-v
+      - ${KV_TYPE:-q4_0}
+      - -np
+      - "1"
+      - --jinja
+      - --reasoning-format
+      - ${REASONING_FORMAT:-none}
+      - --spec-type
+      - draft-mtp
+      - --spec-draft-n-max
+      - "${MTP_N_MAX:-2}"
+      - --no-mmap
+      - -fit
+      - "off"
+    # NOTE: to free ~0.8 GB by keeping mmproj on CPU, add to entrypoint:
+    #   EXTRA_ARGS+=("--no-mmproj-offload")
+    # Combined with -b 2048 -ub 1024 this lets ctx=262144 fit alongside MTP draft.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${CUDA_VISIBLE_DEVICES:-0}"]
+              capabilities: [compute, utility]

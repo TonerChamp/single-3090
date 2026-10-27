@@ -1,0 +1,45 @@
+# llama.cpp embedding-only server. OpenAI-compat /v1/embeddings.
+# Loads Qwen3-Embedding-0.6B Q8_0 GGUF. ~700 MB VRAM (model + buffers).
+# Managed by llama-swap. Stays resident in "embeddings" group (persistent: true).
+
+services:
+  llamacpp-qwen3-embed:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    container_name: llamacpp-qwen3-embed
+    restart: "no"
+    healthcheck:
+      disable: true
+    ports:
+      - "${PORT:-8021}:8000"
+    volumes:
+      - ${MODEL_DIR:?set MODEL_DIR}/qwen3-embedding-0.6b-gguf:/models:ro
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    command:
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - -m
+      - /models/Qwen3-Embedding-0.6B-Q8_0.gguf
+      - --alias
+      - qwen3-embedding-0.6b
+      - --embeddings
+      - --pooling
+      - last
+      - -c
+      - "8192"
+      - -ub
+      - "512"
+      - -b
+      - "512"
+      - -ngl
+      - "99"
+      - --no-mmap

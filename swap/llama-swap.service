@@ -1,0 +1,18 @@
+[Unit]
+Description=llama-swap — model-name routing in front of the llama.cpp compose stacks
+After=network-online.target docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+Environment=SINGLE_3090_ROOT=%h/single-3090
+Environment=MODEL_DIR=%h/models
+ExecStartPre=/bin/sh -c 'pgrep -x llama-swap | grep -v $$ | xargs -r kill -TERM; sleep 1'
+ExecStart=%h/bin/llama-swap --config %h/single-3090/swap/llama-swap.config.yaml --listen 0.0.0.0:8030
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:%h/llama-swap/llama-swap.log
+StandardError=append:%h/llama-swap/llama-swap.log
+
+[Install]
+WantedBy=default.target

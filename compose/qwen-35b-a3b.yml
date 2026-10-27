@@ -1,0 +1,78 @@
+# Qwen3.6-35B-A3B — llama.cpp + Unsloth UD-Q4_K_XL — single 3090
+# Research source: tfriedel + thc1006 + HF disc/37
+# Target: ~135 TPS @ short ctx, 262K full ctx, ~20-23 GB VRAM
+# Notes:
+#   - DO NOT enable --spec-type (ngram-mod) — net-negative on A3B MoE
+#     (expert-saturation phenomenon, thc1006 confirmed in 19 configs)
+#   - --no-mmap required (b9102 fused-expert tensor mmap quirk, same as Gemma)
+#   - q4_0 KV cache (matches Qwen llamacpp/default; required for 262K fit at 24 GB)
+#   - mmproj loaded for vision parity with other profiles
+#   - Sampling intentionally NOT pinned server-side — client-controlled
+#     (thinking off: temp 0.7 / top-p 0.80 / top-k 20; thinking on: temp 0.6 / top-p 0.95 / top-k 20)
+
+services:
+  llamacpp-qwen36-35b-a3b:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    container_name: llamacpp-qwen36-35b-a3b
+    restart: "no"
+    healthcheck:
+      disable: true
+    ports:
+      - "${ESTATE_PORT:-${PORT:-8020}}:8000"
+    volumes:
+      - ${MODEL_DIR:?set MODEL_DIR}/qwen3.6-35b-a3b-gguf:/models:ro
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    entrypoint:
+      - bash
+      - -c
+      - |
+        set -e
+        EXTRA_ARGS=()
+        if [ "$${DISABLE_THINKING:-1}" = "1" ]; then
+          EXTRA_ARGS+=("--chat-template-kwargs" '{"enable_thinking":false}')
+          echo "[entrypoint] DISABLE_THINKING=1 — chat template will produce empty <think></think>"
+        fi
+        exec /app/llama-server "$$@" "$${EXTRA_ARGS[@]}"
+      - --
+    command:
+      - --model
+      - /models/unsloth-ud-q4kxl/Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf
+      - --mmproj
+      - /models/mmproj-BF16.gguf
+      - --alias
+      - qwen3.6-35b-a3b-gguf
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --n-gpu-layers
+      - "999"
+      - --ctx-size
+      - "${CTX_SIZE:-262144}"
+      - --parallel
+      - "1"
+      - --kv-unified
+      - --ctx-checkpoints
+      - "1"
+      - --flash-attn
+      - "on"
+      - --cache-type-k
+      - "${KV_TYPE:-q4_0}"
+      - --cache-type-v
+      - "${KV_TYPE:-q4_0}"
+      - --jinja
+      - --no-mmproj-offload
+      - "-fit"
+      - "off"
+      - --no-mmap
+      - --no-warmup
+      - --reasoning-format
+      - "${REASONING_FORMAT:-none}"

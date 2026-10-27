@@ -1,0 +1,13 @@
+[Unit]
+Description=HTTP API that swaps the active local LLM profile
+After=network-online.target docker.service
+
+[Service]
+Type=simple
+Environment=SWITCH_TOKEN=__REPLACE_ME__
+ExecStart=%h/.venv/bin/python %h/single-3090/swap/llm-switch-api.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

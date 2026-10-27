@@ -1,0 +1,60 @@
+# Gemma-4-26B-A4B-it — llama.cpp + Unsloth UD-Q4_K_XL — single 3090
+# Source: tfriedel/qwen3.6-rtx3090-lab gemma/compose/docker-compose.26b-gguf.yml
+# Endpoint: http://localhost:8020/v1 (alias: gemma-4-26b-a4b-gguf)
+# Expected: 130 tok/s flat, 262K ctx, 22.8 GB VRAM, 95% SM util
+services:
+  llamacpp-gemma4-26b-a4b:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    container_name: llamacpp-gemma4-26b-a4b
+    restart: "no"
+    healthcheck:
+      disable: true
+    ports:
+      - "8020:8000"
+    volumes:
+      - ${MODEL_DIR:?set MODEL_DIR}/gemma-26b-a4b-gguf:/models:ro
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    command:
+      - --model
+      - /models/gemma-4-26B-A4B-it-UD-Q4_K_XL.gguf
+      - --mmproj
+      - /models/mmproj-BF16.gguf
+      - --alias
+      - gemma-4-26b-a4b-gguf
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --n-gpu-layers
+      - "999"
+      - --ctx-size
+      - "262144"
+      - --parallel
+      - "1"
+      - --kv-unified
+      - --ctx-checkpoints
+      - "1"
+      - --flash-attn
+      - "on"
+      - --jinja
+      - --no-mmproj-offload
+      - "-fit"
+      - "off"
+      - --spec-type
+      - ngram-mod
+      - --temp
+      - "1.0"
+      - --top-k
+      - "64"
+      - --top-p
+      - "0.95"
+      - --no-warmup
+      - --no-mmap
