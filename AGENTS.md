@@ -27,6 +27,7 @@ One model occupies the GPU. `MAX_MODEL_LEN=105000` is for `vllm/long-text` only.
 | `ATTRIBUTION.md` | club-3090 commit, sibling repos, weight publishers, and which files are theirs |
 | `LICENSE` | Apache-2.0 |
 | `.env.example` | `MODEL_DIR`, the CUDA allocator line, and `MAX_MODEL_LEN` commented out |
+| `.gitignore` | Ignores generated Python bytecode |
 
 ### profiles/
 
